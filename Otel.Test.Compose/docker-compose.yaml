@@ -1,0 +1,56 @@
+services:
+    aspire:
+        container_name: aspire
+        image: mcr.microsoft.com/dotnet/aspire-dashboard:9.1
+        ports:
+            - "18888:18888"
+        environment:
+            DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: 1
+    otel-collector:
+        container_name: otel-collector
+        image: otel/opentelemetry-collector-contrib:latest
+        ports:
+            - "4317:4317"
+        volumes:
+            - ./otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml
+        depends_on:
+            loki:
+                condition: service_started
+    grafana:
+        container_name: grafana
+        image: grafana/grafana:latest
+        ports:
+            - "3000:3000"
+        environment:
+            - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+            - GF_AUTH_ANONYMOUS_ENABLED=true
+            - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+            - GF_FEATURE_TOGGLES_ENABLE=alertingSimplifiedRouting,alertingQueryAndExpressionsStepMode
+        volumes:
+            - ./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/ds.yaml
+        depends_on:
+            loki:
+                condition: service_started
+    loki:
+        container_name: loki
+        image: grafana/loki:latest
+        ports:
+            - "3100:3100"
+        volumes:
+            - ./loki/config.yaml:/etc/loki/loki-config.yaml
+            - ./loki/data:/tmp/loki/
+    tempo:
+        container_name: tempo
+        image: grafana/tempo:latest
+        command: [ "-config.file=/etc/tempo/tempo-config.yaml" ]
+        volumes:
+            - ./tempo/config.yaml:/etc/tempo/tempo-config.yaml
+            - ./tempo/data:/var/tempo
+    mimir:
+        image: grafana/mimir:latest
+        command: ["-config.file=/etc/mimir/mimir-config.yaml"]
+        hostname: mimir
+        volumes:
+        - ./mimir/config.yaml:/etc/mimir/mimir-config.yaml
+        # - ./mimir/alertmanager-fallback-config.yaml:/etc/alertmanager-fallback-config.yaml
+        - ./mimir/data:/data

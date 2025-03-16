@@ -1,0 +1,69 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+# connectors to generate metrics from the incoming spans
+connectors:
+  # basic service graph
+  servicegraph:
+    latency_histogram_buckets: [100ms, 250ms, 1s, 5s, 10s]
+  # a bit more elaborate spanmetrics
+  spanmetrics:
+    # this is relevant, since grafana expects the traces_spanmetrics_ prefix
+    namespace: traces.spanmetrics
+    # this is relevant, since grafana expects the historgram metrics in seconds
+    histogram:
+      unit: "s"
+    # the rest is close to default with some minor QoL additions
+    dimensions:
+      - name: http.method
+        default: GET
+      - name: http.status_code
+    exemplars:
+      enabled: true
+    events:
+      enabled: true
+      dimensions:
+        - name: exception.type
+        - name: exception.message
+    resource_metrics_key_attributes:
+      - service.name
+      - telemetry.sdk.language
+      - telemetry.sdk.name
+processors:
+  batch:
+exporters:
+  otlp/aspire:
+    endpoint: aspire:18889
+    tls: 
+      insecure: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+  otlphttp/tempo:
+      endpoint: "http://tempo:4318/otlp"
+      tls:
+        insecure: true
+  otlphttp/mimir:
+      endpoint: "http://mimir:9009/otlp"
+      tls:
+        insecure: true
+      compression: "none"
+      headers:
+        X-Scope-OrgID: "default"
+      timeout: 30s
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [otlp/aspire,otlphttp/tempo,spanmetrics,servicegraph]
+    metrics:
+      receivers: [otlp,spanmetrics,servicegraph]
+      exporters: [otlp/aspire,otlphttp/mimir]
+    logs:
+      receivers: [otlp]
+      exporters: [otlp/aspire,otlphttp/loki]
