@@ -35,7 +35,15 @@ connectors:
       - telemetry.sdk.name
 processors:
   batch:
+  transform/mask:
+    log_statements:
+      - replace_pattern(log.body, "(\\b\\d{8})(\\d{4}\\b)",  "$$1****")
+      - replace_all_patterns(log.attributes, "value", "(\\b\\d{8})(\\d{4}\\b)", "$$1****")
+    trace_statements:
+      - replace_all_patterns(span.attributes, "value", "(\\b\\d{8})(\\d{4}\\b)", "$$1****")
 exporters:
+  debug:
+    verbosity: detailed
   otlp/aspire:
     endpoint: aspire:18889
     tls: 
@@ -60,10 +68,12 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
+      processors: [transform/mask]
       exporters: [otlp/aspire,otlphttp/tempo,spanmetrics,servicegraph]
     metrics:
       receivers: [otlp,spanmetrics,servicegraph]
       exporters: [otlp/aspire,otlphttp/mimir]
     logs:
       receivers: [otlp]
+      processors: [transform/mask]
       exporters: [otlp/aspire,otlphttp/loki]
